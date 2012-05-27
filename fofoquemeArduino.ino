@@ -52,7 +52,7 @@ void setup() {
   }
 
   // send to start position
-  // this also updates/resets a the position arrays (currPos, targetPos)
+  // this also updates/resets the position arrays (currPos, targetPos)
   for(int i=0; i<NUM_MOTORS; i++) {
     currPos[i] = centerPos[i];
     targetPos[i] = currPos[i];
@@ -60,7 +60,7 @@ void setup() {
     delay(UPDATE_DELAY);
   }
 
-  // initial condition
+  // initial conditions
   lastTime = millis();
   currState = STATE_WAIT;
   currWriteMotor = 0;
@@ -89,17 +89,23 @@ void loop() {
         Serial.flush();
         // start dance !!!
 
-        // set targetPos for first 2 motors
+        // motor that is gonna do the first writing
         currWriteMotor = 0;
+
+        // turn on the light on first arm
         digitalWrite(lightPins[currWriteMotor/2], HIGH);
+
+        // set targetPos for write arm
         targetPos[currWriteMotor] = writePos[currWriteMotor];
         targetPos[currWriteMotor+1] = writePos[currWriteMotor+1];
 
+        // set targetPos for read arm
         targetPos[currWriteMotor+2] = readPos[currWriteMotor+2];
         targetPos[currWriteMotor+3] = readPos[currWriteMotor+3];
 
-        // new state
+        // new state: go move some motors into read/write positions
         currState = STATE_WRITE;
+        // mostly for debugging
         digitalWrite(13,HIGH);
       }
     }
@@ -108,43 +114,58 @@ void loop() {
   // new states !!
   else if(currState == STATE_WRITE) {
     // currWriteMotor points to motor that is writing
-    // if done moving ...
+    // here it does the actual moving, until it gets to the targetPos
+
+    // when it gets to the targetPos
     if((currPos[currWriteMotor] == targetPos[currWriteMotor])&&(currPos[currWriteMotor+1] == targetPos[currWriteMotor+1])){
+      // turn off the light on first arm and send motors back to center position
       digitalWrite(lightPins[currWriteMotor/2], LOW);
       targetPos[currWriteMotor] = centerPos[currWriteMotor];
       targetPos[currWriteMotor+1] = centerPos[currWriteMotor+1];
 
       // not all writes have a read
+      // if this had a read, turn on its light and send it back to centerPos
       if((currWriteMotor+3) < NUM_MOTORS) {
         digitalWrite(lightPins[(currWriteMotor+2)/2], HIGH);
         targetPos[currWriteMotor+2] = centerPos[currWriteMotor+2];
         targetPos[currWriteMotor+3] = centerPos[currWriteMotor+3];
       }
+      // go reposition the arms
       currState = STATE_REPOS;
     }
   }
   else if(currState == STATE_REPOS) {
     // currWriteMotor still points to motor that wrote last
+    // here it does the actual moving, until it gets to the targetPos
+
+    // at target position
     if((currPos[currWriteMotor] == targetPos[currWriteMotor])&&(currPos[currWriteMotor+1] == targetPos[currWriteMotor+1])){
       // update the current motor
+      // now we want to set up read and write positions for the next pair of arms
       currWriteMotor += 2;
       // now currWriteMotor points to motor that is gonna be writing next
 
       // check if it's a valid motor, or if we are done
       if((currWriteMotor+1) < NUM_MOTORS) {
+        // set write positions
         targetPos[currWriteMotor] = writePos[currWriteMotor];
         targetPos[currWriteMotor+1] = writePos[currWriteMotor+1];
         // not all writes have a read
         if((currWriteMotor+3) < NUM_MOTORS) {
+          // set read positions
           targetPos[currWriteMotor+2] = readPos[currWriteMotor+2];
           targetPos[currWriteMotor+3] = readPos[currWriteMotor+3];        
         }
+        // if there are arms to move, go move them into read/write positions
         currState = STATE_WRITE;
       }
+      // if there are no more motors to read/write
       else{
-        // have reset last arm, send message to phone
+        // have reset last arm, send STOP message to phone
         Serial.write('S');
+        // go wait for next message
         currState = STATE_WAIT;
+        // mostly for debugging
         digitalWrite(13,LOW);
       }
     }
@@ -153,7 +174,7 @@ void loop() {
 
   // if in a moving state, update currPos and move motors
   if((currState != STATE_WAIT)){
-    // update currPos, move it towards target
+    // if have already waited for move delay, update currPos towards target
     if((millis() - lastTime) > UPDATE_DELAY) {
       // for all motors, check curr against target
       for(int i=0; i<NUM_MOTORS; i++){
@@ -173,6 +194,9 @@ void loop() {
   }
 
 }
+
+
+
 
 
 
