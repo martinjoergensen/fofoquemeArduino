@@ -2,34 +2,44 @@
 #define UPDATE_DELAY 10
 #define NUM_MOTORS 10
 
-int servoPins[NUM_MOTORS] ={
-  2,3,4,5,6,7,8,9,10,11};
-int lightPins[NUM_MOTORS/2] ={
-  A4,A3,A2,A1,A0};
-
+// states
 #define STATE_WAIT -1
 #define STATE_WRITE 10
 #define STATE_REPOS 11
 
-Servo myServos[10];
+// list of pins to use for the motors
+//   in the order in which the arms will move
+int servoPins[NUM_MOTORS] ={
+  2,3,4,5,6,7,8,9,10,11};
+// list of pins to use for the light
+//   in the order in which the lights will turn on and off
+int lightPins[NUM_MOTORS/2] ={
+  A4,A3,A2,A1,A0};
 
-int readPos[10] = {
+// servos
+Servo myServos[NUM_MOTORS];
+
+// angle values for the read/write/center positions of each motor
+int readPos[NUM_MOTORS] = {
   115,0,115,0,118,0,115,0,115,0};
-int centerPos[10] = {
+int centerPos[NUM_MOTORS] = {
   90,90,90,90,90,90,90,90,90,90};
-int writePos[10] = {
+int writePos[NUM_MOTORS] = {
   70,180,75,180,80,180,70,180,70,180};
 
-int currPos[10] = {  
+// to keep track of current position and desired position for each motor
+int currPos[NUM_MOTORS] = {  
   0,0,0,0,0,0,0,0,0,0};
-int targetPos[10] = {  
+int targetPos[NUM_MOTORS] = {  
   0,0,0,0,0,0,0,0,0,0};
 
+// for reading a byte from serial connection
 int inByte = 0;
+// to keep track of motor update times
 unsigned long lastTime;
+// current state
 int currState;
-
-//
+// current motor being moved
 int currWriteMotor;
 
 void setup() { 
@@ -42,6 +52,7 @@ void setup() {
   }
 
   // send to start position
+  // this also updates/resets a the position arrays (currPos, targetPos)
   for(int i=0; i<NUM_MOTORS; i++) {
     currPos[i] = centerPos[i];
     targetPos[i] = currPos[i];
@@ -49,17 +60,21 @@ void setup() {
     delay(UPDATE_DELAY);
   }
 
+  // initial condition
   lastTime = millis();
   currState = STATE_WAIT;
   currWriteMotor = 0;
 
-  pinMode(13,OUTPUT);
-  digitalWrite(13,LOW);
-
+  // setup light pins
   for(int i=0; i<NUM_MOTORS/2; i++){
     pinMode(lightPins[i],OUTPUT);
     digitalWrite(lightPins[i],LOW);
   }
+
+  // for debugging
+  pinMode(13,OUTPUT);
+  digitalWrite(13,LOW);
+
 } 
 
 
