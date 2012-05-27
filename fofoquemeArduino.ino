@@ -7,6 +7,7 @@
 #define STATE_WRITE 10
 #define STATE_REPOS 11
 
+// new states
 #define STATE_READ_WRITE 20
 #define STATE_FOFOQUEME 22
 
@@ -114,7 +115,7 @@ void loop() {
 
         // uncomment this to test fofoqueme action!
         // currState = STATE_READ_WRITE;
-        
+
         // mostly for debugging
         digitalWrite(13,HIGH);
       }
@@ -168,6 +169,10 @@ void loop() {
         }
         // if there are arms to move, go move them into read/write positions
         currState = STATE_WRITE;
+
+        // uncomment this to test fofoqueme action!
+        // currState = STATE_READ_WRITE;
+
       }
       // if there are no more motors to read/write
       else{
@@ -181,7 +186,7 @@ void loop() {
     }
   }
 
-  // Fofoqueme state
+  // Fofoqueme states
   else if(currState == STATE_READ_WRITE){
     // currWriteMotor points to motor that is writing
     // here it does the actual moving, until it gets to the targetPos
@@ -205,7 +210,7 @@ void loop() {
       currState = STATE_FOFOQUEME;
     }
   }
-  // Fofoqueme state
+  // Fofoqueme states
   else if(currState == STATE_FOFOQUEME){
     // when it gets to the targetPos
     if((currPos[currWriteMotor] == targetPos[currWriteMotor])&&(currPos[currWriteMotor+1] == targetPos[currWriteMotor+1])){
@@ -225,10 +230,10 @@ void loop() {
           targetPos[currWriteMotor+2] = centerPos[currWriteMotor+2];
           targetPos[currWriteMotor+3] = centerPos[currWriteMotor+3];
         }
-        // go reposition the arms
-        currState = STATE_REPOS;
         // clear fofoqueme counter
         fofoquemeCnt = 0;
+        // go reposition the arms
+        currState = STATE_REPOS;
       }
       // more fofoquing please
       else{
@@ -242,10 +247,10 @@ void loop() {
           targetPos[currWriteMotor+2] = readPos[currWriteMotor+2];
           targetPos[currWriteMotor+3] = readPos[currWriteMotor+3];        
         }
-        // if there are arms to move, go move them into read/write positions
-        currState = STATE_READ_WRITE;
         // increment fofoqueme counter
         fofoquemeCnt += 1;
+        // if there are arms to move, go move them into read/write positions
+        currState = STATE_READ_WRITE;
       }
     }
   }
@@ -272,6 +277,7 @@ void loop() {
   }
 
 }
+
 
 
 
