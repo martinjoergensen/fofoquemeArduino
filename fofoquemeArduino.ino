@@ -7,6 +7,9 @@
 #define STATE_WRITE 10
 #define STATE_REPOS 11
 
+#define STATE_READ_WRITE 20
+#define STATE_FOFOQUEME 22
+
 // list of pins to use for the motors
 //   in the order in which the arms will move
 int servoPins[NUM_MOTORS] ={
@@ -41,6 +44,8 @@ unsigned long lastTime;
 int currState;
 // current motor being moved
 int currWriteMotor;
+// number of times we've fofoqued
+int fofoquemeCnt;
 
 void setup() { 
   // for bluetooth communication
@@ -64,6 +69,7 @@ void setup() {
   lastTime = millis();
   currState = STATE_WAIT;
   currWriteMotor = 0;
+  fofoquemeCnt = 0;
 
   // setup light pins
   for(int i=0; i<NUM_MOTORS/2; i++){
@@ -105,6 +111,10 @@ void loop() {
 
         // new state: go move some motors into read/write positions
         currState = STATE_WRITE;
+
+        // uncomment this to test fofoqueme action!
+        // currState = STATE_READ_WRITE;
+        
         // mostly for debugging
         digitalWrite(13,HIGH);
       }
@@ -171,6 +181,74 @@ void loop() {
     }
   }
 
+  // Fofoqueme state
+  else if(currState == STATE_READ_WRITE){
+    // currWriteMotor points to motor that is writing
+    // here it does the actual moving, until it gets to the targetPos
+
+    // when it gets to the targetPos
+    if((currPos[currWriteMotor] == targetPos[currWriteMotor])&&(currPos[currWriteMotor+1] == targetPos[currWriteMotor+1])){
+      // send base motors to targetPos+5 for fofoqueme action
+      targetPos[currWriteMotor] = currPos[currWriteMotor]+5;
+      // pretty sure the first one is the base motor
+      //targetPos[currWriteMotor+1] = currPos[currWriteMotor+1]+5;
+
+      // not all writes have a read
+      // if this had a read, turn on its light and send base motor to targetPos-5 for fofoqueme action 
+      if((currWriteMotor+3) < NUM_MOTORS) {
+        digitalWrite(lightPins[(currWriteMotor+2)/2], HIGH);
+        targetPos[currWriteMotor+2] = currPos[currWriteMotor+2]-5;
+        // pretty sure the first one is the base motor
+        //targetPos[currWriteMotor+3] = currPos[currWriteMotor+3]-5;
+      }
+      // go reposition the arms
+      currState = STATE_FOFOQUEME;
+    }
+  }
+  // Fofoqueme state
+  else if(currState == STATE_FOFOQUEME){
+    // when it gets to the targetPos
+    if((currPos[currWriteMotor] == targetPos[currWriteMotor])&&(currPos[currWriteMotor+1] == targetPos[currWriteMotor+1])){
+      // if we already fofoqued 5 times...
+      // set targets to go back to center position
+      if(fofoquemeCnt > 4){
+        // turn off the light on first arm and send motors back to center position
+        digitalWrite(lightPins[currWriteMotor/2], LOW);
+        targetPos[currWriteMotor] = centerPos[currWriteMotor];
+        targetPos[currWriteMotor+1] = centerPos[currWriteMotor+1];
+
+        // not all writes have a read
+        // if this had a read, turn on its light and send it back to centerPos
+        if((currWriteMotor+3) < NUM_MOTORS) {
+          // this might be redundant
+          digitalWrite(lightPins[(currWriteMotor+2)/2], HIGH);
+          targetPos[currWriteMotor+2] = centerPos[currWriteMotor+2];
+          targetPos[currWriteMotor+3] = centerPos[currWriteMotor+3];
+        }
+        // go reposition the arms
+        currState = STATE_REPOS;
+        // clear fofoqueme counter
+        fofoquemeCnt = 0;
+      }
+      // more fofoquing please
+      else{
+        // set target to read/write position and increment counter
+        // set write positions
+        targetPos[currWriteMotor] = writePos[currWriteMotor];
+        targetPos[currWriteMotor+1] = writePos[currWriteMotor+1];
+        // not all writes have a read
+        if((currWriteMotor+3) < NUM_MOTORS) {
+          // set read positions
+          targetPos[currWriteMotor+2] = readPos[currWriteMotor+2];
+          targetPos[currWriteMotor+3] = readPos[currWriteMotor+3];        
+        }
+        // if there are arms to move, go move them into read/write positions
+        currState = STATE_READ_WRITE;
+        // increment fofoqueme counter
+        fofoquemeCnt += 1;
+      }
+    }
+  }
 
   // if in a moving state, update currPos and move motors
   if((currState != STATE_WAIT)){
@@ -194,29 +272,6 @@ void loop() {
   }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
