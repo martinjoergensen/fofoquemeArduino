@@ -1,6 +1,7 @@
 #include <Servo.h> 
-#define UPDATE_DELAY 10
 #define NUM_MOTORS 10
+#define DELAY_SLOW 30
+#define DELAY_FAST 10
 
 // states
 #define STATE_WAIT -1
@@ -47,6 +48,9 @@ int currState;
 int currWriteMotor;
 // number of times we've fofoqued
 int fofoquemeCnt;
+// speed of arm movement is inversely proportional to this
+int updateDelay;
+int fofoqueDelay;
 
 void setup() { 
   // for bluetooth communication
@@ -57,20 +61,22 @@ void setup() {
     myServos[i].attach(servoPins[i]);
   }
 
+  // initial conditions
+  lastTime = millis();
+  currState = STATE_WAIT;
+  currWriteMotor = 0;
+  fofoquemeCnt = 0;
+  updateDelay = DELAY_FAST;
+  fofoqueDelay = DELAY_FAST;
+
   // send to start position
   // this also updates/resets the position arrays (currPos, targetPos)
   for(int i=0; i<NUM_MOTORS; i++) {
     currPos[i] = centerPos[i];
     targetPos[i] = currPos[i];
     myServos[i].write(currPos[i]);
-    delay(UPDATE_DELAY);
+    delay(updateDelay);
   }
-
-  // initial conditions
-  lastTime = millis();
-  currState = STATE_WAIT;
-  currWriteMotor = 0;
-  fofoquemeCnt = 0;
 
   // setup light pins
   for(int i=0; i<NUM_MOTORS/2; i++){
@@ -92,7 +98,7 @@ void loop() {
       // get incoming byte:
       inByte = Serial.read();
       // check for GO signal
-      if(inByte == 'G') {
+      if((inByte == 'G')||(inByte == 'H')) {
         Serial.flush();
         // start dance !!!
 
@@ -111,10 +117,10 @@ void loop() {
         targetPos[currWriteMotor+3] = readPos[currWriteMotor+3];
 
         // new state: go move some motors into read/write positions
-        currState = STATE_WRITE;
+        currState = STATE_READ_WRITE;
 
-        // uncomment this to test fofoqueme action!
-        // currState = STATE_READ_WRITE;
+        // set the fofoque speed
+        fofoqueDelay = (inByte == 'G')?DELAY_FAST:DELAY_SLOW;
 
         // mostly for debugging
         digitalWrite(13,HIGH);
@@ -157,25 +163,21 @@ void loop() {
       // now currWriteMotor points to motor that is gonna be writing next
 
       // check if it's a valid motor, or if we are done
-      if((currWriteMotor+1) < NUM_MOTORS) {
+      // all writes have a read, only move into write state if there is one to read
+      if((currWriteMotor+3) < NUM_MOTORS) {
         // set write positions
         targetPos[currWriteMotor] = writePos[currWriteMotor];
         targetPos[currWriteMotor+1] = writePos[currWriteMotor+1];
-        // not all writes have a read
-        if((currWriteMotor+3) < NUM_MOTORS) {
-          // set read positions
-          targetPos[currWriteMotor+2] = readPos[currWriteMotor+2];
-          targetPos[currWriteMotor+3] = readPos[currWriteMotor+3];        
-        }
+        // set read positions
+        targetPos[currWriteMotor+2] = readPos[currWriteMotor+2];
+        targetPos[currWriteMotor+3] = readPos[currWriteMotor+3]; 
         // if there are arms to move, go move them into read/write positions
-        currState = STATE_WRITE;
-
-        // uncomment this to test fofoqueme action!
-        // currState = STATE_READ_WRITE;
-
+        currState = STATE_READ_WRITE;
       }
       // if there are no more motors to read/write
       else{
+        // turn light off on last phone
+        digitalWrite(lightPins[currWriteMotor/2], LOW);
         // have reset last arm, send STOP message to phone
         Serial.write('S');
         // go wait for next message
@@ -194,16 +196,16 @@ void loop() {
     // when it gets to the targetPos
     if((currPos[currWriteMotor] == targetPos[currWriteMotor])&&(currPos[currWriteMotor+1] == targetPos[currWriteMotor+1])){
       // send base motors to targetPos+5 for fofoqueme action
-      targetPos[currWriteMotor] = currPos[currWriteMotor]+5;
       // pretty sure the first one is the base motor
+      targetPos[currWriteMotor] = currPos[currWriteMotor]+5;
       //targetPos[currWriteMotor+1] = currPos[currWriteMotor+1]+5;
 
       // not all writes have a read
       // if this had a read, turn on its light and send base motor to targetPos-5 for fofoqueme action 
       if((currWriteMotor+3) < NUM_MOTORS) {
         digitalWrite(lightPins[(currWriteMotor+2)/2], HIGH);
-        targetPos[currWriteMotor+2] = currPos[currWriteMotor+2]-5;
         // pretty sure the first one is the base motor
+        targetPos[currWriteMotor+2] = currPos[currWriteMotor+2]-5;
         //targetPos[currWriteMotor+3] = currPos[currWriteMotor+3]-5;
       }
       // go reposition the arms
@@ -212,11 +214,16 @@ void loop() {
   }
   // Fofoqueme states
   else if(currState == STATE_FOFOQUEME){
+    // set fofoque speed
+    //updateDelay = DELAY_FAST;
+    //updateDelay = DELAY_SLOW;
+    updateDelay = fofoqueDelay;
+
     // when it gets to the targetPos
     if((currPos[currWriteMotor] == targetPos[currWriteMotor])&&(currPos[currWriteMotor+1] == targetPos[currWriteMotor+1])){
       // if we already fofoqued 5 times...
       // set targets to go back to center position
-      if(fofoquemeCnt > 4){
+      if(fofoquemeCnt > 5){
         // turn off the light on first arm and send motors back to center position
         digitalWrite(lightPins[currWriteMotor/2], LOW);
         targetPos[currWriteMotor] = centerPos[currWriteMotor];
@@ -232,6 +239,8 @@ void loop() {
         }
         // clear fofoqueme counter
         fofoquemeCnt = 0;
+        // reset speed (for quick reposition)
+        updateDelay = DELAY_FAST;
         // go reposition the arms
         currState = STATE_REPOS;
       }
@@ -258,7 +267,7 @@ void loop() {
   // if in a moving state, update currPos and move motors
   if((currState != STATE_WAIT)){
     // if have already waited for move delay, update currPos towards target
-    if((millis() - lastTime) > UPDATE_DELAY) {
+    if((millis() - lastTime) > updateDelay) {
       // for all motors, check curr against target
       for(int i=0; i<NUM_MOTORS; i++){
         if(currPos[i] > targetPos[i]){
@@ -277,6 +286,10 @@ void loop() {
   }
 
 }
+
+
+
+
 
 
 
